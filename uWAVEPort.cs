@@ -487,7 +487,7 @@ namespace uWAVELib
 
         private void OnInfoEvent(string msg)
         {
-            InfoEvent.Rise(this, new InfoEventArgs(msg));
+            InfoEvent.Rise(this, new LogEventArgs(LogLineType.INFO, msg));
         }
 
         #region Parsers
@@ -524,7 +524,7 @@ namespace uWAVELib
                 Depth_m = dpt;
                 SupplyVoltage_V = vcc;
 
-                AMBDataReceived.Raise(this, new EventArgs());
+                AMBDataReceived.Rise(this, new EventArgs());
             }
             catch (Exception ex)
             {
@@ -573,7 +573,7 @@ namespace uWAVELib
                 IsCommandModeByDefault = isCmdMode;
                 
 
-                DeviceInfoReceived.Raise(this, new EventArgs());
+                DeviceInfoReceived.Rise(this, new EventArgs());
             }
             catch (Exception ex)
             {
@@ -851,7 +851,7 @@ namespace uWAVELib
         public EventHandler<RCAsyncInReceivedEventArgs> RCAsyncInReceived;
         public EventHandler<RCLBLAReceivedEventArgs> RCLBLAReceived;
 
-        public EventHandler<InfoEventArgs> InfoEvent;
+        public EventHandler<LogEventArgs> InfoEvent;
         public EventHandler<NewNMEAMessageEventArgs> UnknownSentenceReceived;
 
         #endregion
