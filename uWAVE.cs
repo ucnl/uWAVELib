@@ -40,6 +40,14 @@ namespace uWAVELib
         LOC_ERR_TX_BUFFER_OVERRUN = 9,
         LOC_ERR_CHKSUM_ERROR = 10,
         LOC_ERR_TX_FINISHED = 11,
+
+        // 12.06.2019
+        LOC_ACK_BEFORE_STANDBY = 12,
+        LOC_ACK_AFTER_WAKEUP = 13,
+
+        // 30.10.2019
+        LOC_ERR_SVOLTAGE_TOO_HIGH = 14,
+
         LOC_ERR_UNKNOWN
     }
 
