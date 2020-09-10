@@ -188,6 +188,24 @@ namespace uWAVELib
         #endregion
     }
 
+    public class UnknownSentenceEventArgs : EventArgs
+    {
+        #region Properties
+
+        public NMEASentence Sentence { get; private set; }
+
+        #endregion
+
+        #region Constructor
+
+        public UnknownSentenceEventArgs(NMEASentence sentence)
+        {
+            Sentence = sentence;
+        }
+
+        #endregion
+    }
+
     #endregion
     
     public class uWAVEPort : IDisposable
@@ -222,7 +240,37 @@ namespace uWAVELib
 
         ICs lastQueryID = ICs.IC_INVALID;
 
+        static readonly int waitingRemoteMaxCnt = 5;
+        static readonly int waitingLocalMaxCnt = 3;
 
+        int waitingRemoteCnt = 0;
+        bool isWaitingRemote = false;
+        public bool IsWaitingRemote
+        {
+            get { return isWaitingRemote; }
+            private set
+            {
+                isWaitingRemote = value;
+                if (isWaitingRemote)
+                    waitingRemoteCnt = 0;
+            }
+        }
+
+        int waitingLocalCnt = 0;
+        bool isWaitingLocal = false;
+        public bool IsWaitingLocal
+        {
+            get { return isWaitingLocal; }
+            private set
+            {
+                isWaitingLocal = value;
+                if (isWaitingLocal)
+                {
+                    waitingLocalCnt = 0;
+                }
+            }
+        }
+        
         #region Device information
 
         public string SerialNumber { get; private set; }
@@ -260,12 +308,7 @@ namespace uWAVELib
         public double Depth_m { get; private set; }
         public double SupplyVoltage_V { get; private set; }
 
-        #endregion
-
-        EventHandler<NewNMEAMessageEventArgs> portNewMessageHandler;
-        EventHandler<SerialErrorReceivedEventArgs> portErrorHandler;
-        EventHandler<RawDataReceivedEventArgs> portRawDataHandler;
-        EventHandler timerTickHandler;
+        #endregion      
 
         private delegate void parserDelegate(object[] parameters);
         private Dictionary<ICs, parserDelegate> parsers;
@@ -290,8 +333,8 @@ namespace uWAVELib
                 // IC_D2H_ACK             $PUWV0,cmdID,errCode
                 NMEAParser.AddProprietarySentenceDescription(ManufacturerCodes.UWV, "0", "c--c,x");
 
-                // IC_H2D_SETTINGS_WRITE  $PUWV1,rxChID,txChID,styPSU,isCmdMode,isACKOnTXFinished
-                NMEAParser.AddProprietarySentenceDescription(ManufacturerCodes.UWV, "1", "x,x,x.x,x,x");
+                // IC_H2D_SETTINGS_WRITE  $PUWV1,rxChID,txChID,styPSU,isCmdMode,isACKOnTXFinished,gravityAcc
+                NMEAParser.AddProprietarySentenceDescription(ManufacturerCodes.UWV, "1", "x,x,x.x,x,x,x.x");
 
                 // IC_H2D_RC_REQUEST      $PUWV2,txChID,rxChID,rcCmdID
                 NMEAParser.AddProprietarySentenceDescription(ManufacturerCodes.UWV, "2", "x,x,x");
@@ -342,11 +385,7 @@ namespace uWAVELib
             #endregion
 
             #region port
-
-            portNewMessageHandler = new EventHandler<NewNMEAMessageEventArgs>(port_NewNMEAMessageReceived);
-            portErrorHandler = new EventHandler<SerialErrorReceivedEventArgs>(port_ErrorReceived);
-            portRawDataHandler = new EventHandler<RawDataReceivedEventArgs>(port_RawDataReceived);
-
+           
             port = new NMEASerialPort(new SerialPortSettings(portName, 
                 portBaudrate, 
                 System.IO.Ports.Parity.None, 
@@ -354,15 +393,18 @@ namespace uWAVELib
                 System.IO.Ports.StopBits.One, 
                 System.IO.Ports.Handshake.None));
 
+            port.NewNMEAMessage += new EventHandler<NewNMEAMessageEventArgs>(port_NewNMEAMessageReceived);
+            port.PortError += new EventHandler<SerialErrorReceivedEventArgs>(port_ErrorReceived);
+            port.RawDataReceived = new EventHandler<RawDataReceivedEventArgs>(port_RawDataReceived);
+
             #endregion
 
             #region timer
 
-            timerTickHandler = new EventHandler(timer_Tick);
-
             timer = new PrecisionTimer();
-            timer.Mode = Mode.OneShot;
+            timer.Mode = Mode.Periodic;
             timer.Period = 1000;
+            timer.Tick += new EventHandler(timer_Tick);
 
             #endregion
 
@@ -419,54 +461,21 @@ namespace uWAVELib
             Temperature_C = double.NaN;
             Depth_m = double.NaN;
             SupplyVoltage_V = double.NaN;
-        }
 
-        private void PortHandlersSubscribe(bool subscribe)
-        {
-            if (subscribe)
-            {
-                port.NewNMEAMessage += portNewMessageHandler;
-                port.PortError += portErrorHandler;
-                port.RawDataReceived += portRawDataHandler;
-            }
-            else
-            {
-                port.NewNMEAMessage -= portNewMessageHandler;
-                port.PortError -= portErrorHandler;
-                port.RawDataReceived -= portRawDataHandler;
-            }
-        }
-
-        private void TimerHandlersSubscribe(bool subscribe)
-        {
-            if (subscribe)
-            {
-                timer.Tick += timerTickHandler;
-            }
-            else
-            {
-                timer.Tick -= timerTickHandler;
-            }
-        }
+            IsWaitingRemote = false;
+            IsWaitingLocal = false;
+        }    
       
         private bool TrySend(string message, ICs queryID)
         {
-            bool result = IsCommandMode && port.IsOpen && !timer.IsRunning;
+            bool result = IsCommandMode && port.IsOpen && !IsWaitingLocal;
 
             if (result)
             {
                 try
                 {
                     port.SendData(message);
-
-                    if ((queryID == ICs.IC_H2D_SETTINGS_WRITE) ||
-                        (queryID == ICs.IC_H2D_AMB_DTA_CFG))
-                        timer.Period = 3000;
-                    else
-                        timer.Period = 1000;
-
-                    timer.Start();
-
+                    IsWaitingLocal = true;
                     lastQueryID = queryID;
                     result = true;
                     OnInfoEvent(string.Format("<< {0}", message));
@@ -476,7 +485,7 @@ namespace uWAVELib
                     OnInfoEvent(ex);
                 }
             }
-
+            
             return result;
         }
         
@@ -499,7 +508,10 @@ namespace uWAVELib
                 ICs sntID = uWAVE.ICsByMessageID((string)parameters[0]);
                 LocalError_Enum errID = (LocalError_Enum)(int)parameters[1];
 
-                timer.Stop();
+                IsWaitingLocal = false;
+
+                if (sntID == ICs.IC_H2D_RC_REQUEST)
+                    IsWaitingRemote = true;
                 
                 ACKReceived.Rise(this, new ACKReceivedEventArgs(sntID, errID));
             }
@@ -557,7 +569,7 @@ namespace uWAVELib
 
                 var isCmdMode = Convert.ToBoolean((int)parameters[11]);
 
-                timer.Stop();
+                IsWaitingLocal = false;
 
                 SerialNumber = serialNumber;
                 SystemMoniker = sysMoniker;
@@ -572,7 +584,6 @@ namespace uWAVELib
                 IsPTS = isPTS;
                 IsCommandModeByDefault = isCmdMode;
                 
-
                 DeviceInfoReceived.Rise(this, new EventArgs());
             }
             catch (Exception ex)
@@ -610,6 +621,8 @@ namespace uWAVELib
                 double value = doubleNullChecker(parameters[4]);
                 double azimuth = doubleNullChecker(parameters[5]);
 
+                IsWaitingRemote = false;
+
                 RCResponseReceived.Rise(this, new RCResponseReceivedEventArgs(txChID, rcCmdID, pTime, snr, value, azimuth));
             }
             catch (Exception ex)
@@ -626,6 +639,8 @@ namespace uWAVELib
                 int txChID = (int)parameters[0];
                 RC_CODES_Enum rcCmdID = (RC_CODES_Enum)(int)parameters[1];
 
+                IsWaitingRemote = false;
+
                 RCTimeoutReceived.Rise(this, new RCTimeoutReceivedEventArgs(txChID, rcCmdID));
             }
             catch (Exception ex)
@@ -640,12 +655,12 @@ namespace uWAVELib
             {
                 // IC_D2H_LBLA           $PUWVA,baseID,baseLat,baseLon,baseDpt,baseBat,pingerData,TOAsecond
                 uLBLBaseIDs baseID = (uLBLBaseIDs)(int)parameters[0];
-                double baseLat = (double)parameters[1];
-                double baseLon = (double)parameters[2];
-                double baseDpt = (double)parameters[3];
-                double baseBat = (double)parameters[4];
+                double baseLat = doubleNullChecker(parameters[1]);
+                double baseLon = doubleNullChecker(parameters[2]);
+                double baseDpt = doubleNullChecker(parameters[3]);
+                double baseBat = doubleNullChecker(parameters[4]);
                 int pingerData = (int)parameters[5];
-                double TOASecond = (double)parameters[6];
+                double TOASecond = doubleNullChecker(parameters[6]);
 
                 double pValue = 0.0;
                 uLBLPingerDataIDs pDataID = PingerDataDecode(pingerData, out pValue);
@@ -668,16 +683,13 @@ namespace uWAVELib
         {
             InitDeviceInformation();
             port.Open();
-            PortHandlersSubscribe(true);
-            TimerHandlersSubscribe(true);
+            timer.Start();
         }
 
         public void Close()
         {
-            TimerHandlersSubscribe(false);
-            PortHandlersSubscribe(false);
             timer.Stop();
-            port.Close();            
+            port.Close();
         }
 
 
@@ -692,7 +704,7 @@ namespace uWAVELib
             return TrySend(msg, ICs.IC_H2D_DINFO_GET);            
         }
 
-        public bool SettingsWriteQuery(int txChID, int rxChID, double salinityPSU, bool isCmdMode, bool isACKOnTXFinished)
+        public bool SettingsWriteQuery(int txChID, int rxChID, double salinityPSU, bool isCmdMode, bool isACKOnTXFinished, double gravityAcc)
         {
             var msg = NMEAParser.BuildProprietarySentence(ManufacturerCodes.UWV, "1", new object[] 
             { 
@@ -700,7 +712,8 @@ namespace uWAVELib
                 rxChID, 
                 salinityPSU, 
                 Convert.ToInt32(isCmdMode),
-                Convert.ToInt32(isACKOnTXFinished)
+                Convert.ToInt32(isACKOnTXFinished),
+                gravityAcc
             });
 
             return TrySend(msg, ICs.IC_H2D_SETTINGS_WRITE);
@@ -708,14 +721,22 @@ namespace uWAVELib
 
         public bool RCRequestQuery(int txChID, int rxChID, RC_CODES_Enum cmdID)
         {
-            var msg = NMEAParser.BuildProprietarySentence(ManufacturerCodes.UWV, "2", new object[] 
+            if (!IsWaitingRemote)
             {
-                txChID,
-                rxChID,
-                (int)cmdID 
-            });
+                var msg = NMEAParser.BuildProprietarySentence(ManufacturerCodes.UWV, "2", new object[] 
+                {
+                    txChID,
+                    rxChID,
+                    (int)cmdID 
+                });
 
-            return TrySend(msg, ICs.IC_H2D_RC_REQUEST);
+                return TrySend(msg, ICs.IC_H2D_RC_REQUEST);
+            }
+            else
+            {
+                OnInfoEvent("Unable to perform a remote request due to waiting for previous");
+                return false;
+            }
         }
 
         public bool AMBDTAConfigQuery(bool isSaveToFlash, int periodMs, bool isPressure, bool isTemperature, bool isDepth, bool isVCC)
@@ -731,6 +752,11 @@ namespace uWAVELib
             });
 
             return TrySend(msg, ICs.IC_H2D_AMB_DTA_CFG);
+        }
+
+        public void EmulateInput(string message)
+        {
+            port_NewNMEAMessageReceived(port, new NewNMEAMessageEventArgs(message));
         }
 
         #endregion
@@ -776,7 +802,7 @@ namespace uWAVELib
                             {
                                 // skip unsupported sentence
                                 if (UnknownSentenceReceived != null)
-                                    UnknownSentenceReceived.Rise(this, e);
+                                    UnknownSentenceReceived.Rise(this, new UnknownSentenceEventArgs(result));
                                 else
                                     OnInfoEvent(string.Format("WARNING: unsupported sentence identifier \"{0}\" (\"{1}\") in \"{2}\"", sentenceID, pResult.SentenceIDString, e.Message));
                             }
@@ -785,7 +811,7 @@ namespace uWAVELib
                         {
                             // skip unknown sentence ID
                             if (UnknownSentenceReceived != null)
-                                UnknownSentenceReceived.Rise(this, e);
+                                UnknownSentenceReceived.Rise(this, new UnknownSentenceEventArgs(result));
                             else
                                 OnInfoEvent(string.Format("WARNING: unsupported sentence identifier \"{0}\" in \"{1}\"", pResult.SentenceIDString, e.Message));
                         }
@@ -794,7 +820,7 @@ namespace uWAVELib
                     {
                         // skip unsupported manufacturer ID
                         if (UnknownSentenceReceived != null)
-                            UnknownSentenceReceived.Rise(this, e);
+                            UnknownSentenceReceived.Rise(this, new UnknownSentenceEventArgs(result));
                         else
                             OnInfoEvent(string.Format("WARNING: unsupported manufacturer identifier \"{0}\" in \"{1}\"", pResult.SentenceIDString, e.Message));
                     }
@@ -803,7 +829,7 @@ namespace uWAVELib
                 {
                     // skip standard sentence
                     if (UnknownSentenceReceived != null)
-                        UnknownSentenceReceived.Rise(this, e);
+                        UnknownSentenceReceived.Rise(this, new UnknownSentenceEventArgs(result));
                     else
                         OnInfoEvent(string.Format("WARNING: unsupported standard sentence \"{0}\"", e.Message));
                 }
@@ -828,8 +854,26 @@ namespace uWAVELib
 
         private void timer_Tick(object sender, EventArgs e)
         {
-            DeviceTimeout.Rise(this, new DeviceTimeoutEventArgs(lastQueryID));
-            lastQueryID = ICs.IC_INVALID;
+            if (IsWaitingLocal)
+            {
+                if (++waitingLocalCnt > waitingLocalMaxCnt)
+                {
+                    IsWaitingLocal = false;
+                    DeviceTimeout.Rise(this, new DeviceTimeoutEventArgs(lastQueryID));
+                    lastQueryID = ICs.IC_INVALID;
+                }
+            }
+
+            if (IsWaitingRemote)
+            {
+                if (++waitingRemoteCnt > waitingRemoteMaxCnt)
+                {
+                    IsWaitingRemote = false;
+
+                    // Device timeout handler, because it probably has caused by poor connection between the modem and this wrapper
+                    DeviceTimeout.Rise(this, new DeviceTimeoutEventArgs(ICs.IC_H2D_RC_REQUEST));
+                }
+            }
         }
 
         #endregion
@@ -852,7 +896,7 @@ namespace uWAVELib
         public EventHandler<RCLBLAReceivedEventArgs> RCLBLAReceived;
 
         public EventHandler<LogEventArgs> InfoEvent;
-        public EventHandler<NewNMEAMessageEventArgs> UnknownSentenceReceived;
+        public EventHandler<UnknownSentenceEventArgs> UnknownSentenceReceived;
 
         #endregion
         
