@@ -60,10 +60,21 @@ namespace uWAVELib
         IC_D2H_RC_TIMEOUT,
         IC_D2H_RC_ASYNC_IN,
         IC_H2D_AMB_DTA_CFG,
-        IC_D2H_AMB_DTA,
-        IC_D2H_LBLA,
+        IC_D2H_AMB_DTA,        
         IC_H2D_DINFO_GET,
         IC_D2H_DINFO,
+
+        IC_H2D_PT_SETTINGS_READ,
+        IC_D2H_PT_SETTINGS,
+        IC_H2H_PT_SETTINGS_WRITE,
+        IC_H2D_PT_SEND,
+        IC_D2H_PT_FAILED,
+        IC_D2H_PT_DLVRD,
+        IC_D2H_PT_RCVD,
+
+        IC_D2H_PT_HEARD,
+        IC_D2H_CM_HEARD,
+
         IC_D2H_ANY,
         IC_INVALID
     }
@@ -110,6 +121,8 @@ namespace uWAVELib
 
         public static readonly int CR_STRONG_MAX_CODE_CHANNELS = 28;
 
+        public static readonly int PT_MAX_PACKET_SIZE = 64;
+
 
         static Dictionary<string, ICs> ICsIdxArray = new Dictionary<string, ICs>()
         {
@@ -120,10 +133,21 @@ namespace uWAVELib
             { "4", ICs.IC_D2H_RC_TIMEOUT },
             { "5", ICs.IC_D2H_RC_ASYNC_IN },
             { "6", ICs.IC_H2D_AMB_DTA_CFG },
-            { "7", ICs.IC_D2H_AMB_DTA },
-            { "A", ICs.IC_D2H_LBLA },            
+            { "7", ICs.IC_D2H_AMB_DTA },               
             { "?", ICs.IC_H2D_DINFO_GET },
             { "!", ICs.IC_D2H_DINFO },
+
+            { "D", ICs.IC_H2D_PT_SETTINGS_READ },
+            { "E", ICs.IC_D2H_PT_SETTINGS },
+            { "F", ICs.IC_H2H_PT_SETTINGS_WRITE },
+            { "G", ICs.IC_H2D_PT_SEND },
+            { "H", ICs.IC_D2H_PT_FAILED },
+            { "I", ICs.IC_D2H_PT_DLVRD },
+            { "J", ICs.IC_D2H_PT_RCVD },
+
+            {"K", ICs.IC_D2H_PT_HEARD },
+            {"L", ICs.IC_D2H_CM_HEARD },
+
             { "-", ICs.IC_D2H_ANY }
         };
 
