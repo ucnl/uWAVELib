@@ -179,16 +179,18 @@ namespace uWAVELib
 
         public byte Target_ptAddress { get; private set; }
         public byte TriesTaken { get; private set; }
+        public double Azimuth { get; private set; }
         public byte[] DataPacket { get; private set; }
 
         #endregion
 
         #region Constructor
 
-        public PacketEventArgs(byte target_ptAddress, byte triesTaken, byte[] dataPacket)
+        public PacketEventArgs(byte target_ptAddress, byte triesTaken, double azimuth, byte[] dataPacket)
         {
             Target_ptAddress = target_ptAddress;
             TriesTaken = triesTaken;
+            Azimuth = azimuth;
             DataPacket = dataPacket;
         }
 
@@ -200,21 +202,70 @@ namespace uWAVELib
         #region Properties
 
         public byte Target_ptAddress { get; private set; }
+        public double Azimuth { get; private set; }
         public byte[] DataPacket { get; private set; }
 
         #endregion
 
         #region Constructor
 
-        public PacketReceivedEventArgs(byte target_ptAddress, byte[] dataPacket)
+        public PacketReceivedEventArgs(byte target_ptAddress, double azimuth, byte[] dataPacket)
         {
             Target_ptAddress = target_ptAddress;
+            Azimuth = azimuth;
             DataPacket = dataPacket;
         }
 
         #endregion
     }
 
+    public class PacketRequestTimeoutEventArgs : EventArgs
+    {
+        #region Properties
+
+        public byte Target_ptAddress { get; private set; }
+        public DataID DataId { get; private set; }
+        
+        #endregion
+
+        #region Constructor
+
+        public PacketRequestTimeoutEventArgs(byte target_ptAddress, DataID dataID)
+        {
+            Target_ptAddress = target_ptAddress;
+            DataId = dataID;
+        }
+
+        #endregion
+    }
+
+    public class PacketResponseEventArgs : EventArgs
+    {
+        #region Properties
+
+        public byte Target_ptAddress { get; private set; }
+        public DataID DataId { get; private set; }
+        public double DataValue { get; private set; }
+        public double PropagationTime_s { get; private set; }
+        public double Azimuth { get; private set; }
+        
+        #endregion
+
+        #region Constructor
+
+        public PacketResponseEventArgs(byte target_ptAddress, DataID dataID, double dataValue, double pTime, double azimuth)
+        {
+            Target_ptAddress = target_ptAddress;
+            DataId = dataID;
+            DataValue = dataValue;
+            PropagationTime_s = pTime;
+            Azimuth = azimuth;
+        }
+
+        #endregion
+
+    }
+    
     #endregion
     
     public class uWAVEPort : IDisposable
@@ -322,6 +373,9 @@ namespace uWAVELib
         public double Depth_m { get; private set; }
         public double SupplyVoltage_V { get; private set; }
 
+        public double Pitch { get; private set; }
+        public double Roll { get; private set; }
+
         #endregion      
 
         private delegate void parserDelegate(object[] parameters);
@@ -378,7 +432,11 @@ namespace uWAVELib
                 // IC_D2H_AMB_DTA         $PUWV7,prs_mBar,temp_C,dpt_m,batVoltage_V
                 NMEAParser.AddProprietarySentenceDescription(ManufacturerCodes.UWV, "7", "x.x,x.x,x.x,x.x");
 
-                #endregion                
+                //
+                NMEAParser.AddProprietarySentenceDescription(ManufacturerCodes.UWV, "8", "x,x");
+                NMEAParser.AddProprietarySentenceDescription(ManufacturerCodes.UWV, "9", "x.x,x.x,x.x");
+
+                #endregion                                
 
                 #region Device info
 
@@ -407,21 +465,30 @@ namespace uWAVELib
                 // IC_D2H_PT_FAILED          $PUWVH,tareget_ptAddress,triesTaken,data
                 NMEAParser.AddProprietarySentenceDescription(ManufacturerCodes.UWV, "H", "x,x,h--h");
 
-                // IC_D2H_PT_DLVRD           $PUWVI,tareget_ptAddress,triesTaken,data
-                NMEAParser.AddProprietarySentenceDescription(ManufacturerCodes.UWV, "I", "x,x,h--h");
+                // IC_D2H_PT_DLVRD           $PUWVI,tareget_ptAddress,triesTaken,[azimuth],data
+                NMEAParser.AddProprietarySentenceDescription(ManufacturerCodes.UWV, "I", "x,x,x.x,h--h");
 
-                // IC_D2H_PT_RCVD            $PUWVJ,sender_ptAddress,data
-                NMEAParser.AddProprietarySentenceDescription(ManufacturerCodes.UWV, "J", "x,h--h");
+                // IC_D2H_PT_RCVD            $PUWVJ,sender_ptAddress,[azimuth],data
+                NMEAParser.AddProprietarySentenceDescription(ManufacturerCodes.UWV, "J", "x,x.x,h--h");
+
+                // IC_H2D_PT_ITG             $PUWVK,target_ptAddress,pt_itg_dataID
+                NMEAParser.AddProprietarySentenceDescription(ManufacturerCodes.UWV, "K", "x,x");
+
+                // IC_D2H_PT_TMO             $PUWVL,target_ptAddress,pt_itg_dataID
+                NMEAParser.AddProprietarySentenceDescription(ManufacturerCodes.UWV, "L", "x,x");
+
+                // IC_D2H_PT_ITG_RESP
+                NMEAParser.AddProprietarySentenceDescription(ManufacturerCodes.UWV, "M", "x,x,x.x,x.x,x.x");
 
                 #endregion
 
                 #region LBL-related
 
                 // IC_D2H_PT_HEARD          $PUWVK,b_id,b_lat,b_lon,b_toa_s,sender_pt_Address,dataPacket
-                NMEAParser.AddProprietarySentenceDescription(ManufacturerCodes.UWV, "K", "x,x.x,x.x,x.x,x,h--h");
+                //NMEAParser.AddProprietarySentenceDescription(ManufacturerCodes.UWV, "K", "x,x.x,x.x,x.x,x,h--h");
 
                 //IC_D2H_CM_HEARD           $PUWVL,b_id,b_lat,b_lon,b_toa_s,data_ID,dataValue,msr_dB
-                NMEAParser.AddProprietarySentenceDescription(ManufacturerCodes.UWV, "L", "x,x.x,x.x,x.x,x,x.x,x.x");
+                //NMEAParser.AddProprietarySentenceDescription(ManufacturerCodes.UWV, "L", "x,x.x,x.x,x.x,x,x.x,x.x");
 
                 #endregion
 
@@ -436,6 +503,9 @@ namespace uWAVELib
             {
                 { ICs.IC_D2H_ACK, new parserDelegate(ACK_Parse) },
                 { ICs.IC_D2H_AMB_DTA, new parserDelegate(AMB_DTA_Parse) },
+
+                { ICs.IC_D2H_INC_DTA, new parserDelegate(INC_DTA_Parse) },
+
                 { ICs.IC_D2H_DINFO, new parserDelegate(DINFO_Parse) },
                 { ICs.IC_D2H_RC_ASYNC_IN, new parserDelegate(RC_ASYNC_IN_Parse) },
                 { ICs.IC_D2H_RC_RESPONSE, new parserDelegate(RC_RESPONSE_Parse) },
@@ -446,8 +516,8 @@ namespace uWAVELib
                 { ICs.IC_D2H_PT_DLVRD, new parserDelegate(PT_DLVRD_Parse) },
                 { ICs.IC_D2H_PT_RCVD, new parserDelegate(PT_RCVD_Parse) },
 
-                { ICs.IC_D2H_CM_HEARD, new parserDelegate(CM_HEARD) },
-                { ICs.IC_D2H_PT_HEARD, new parserDelegate(PT_HEARD) },
+                { ICs.IC_D2H_PT_ITG_TMO, new parserDelegate(PT_ITG_TMO_Parse) },
+                { ICs.IC_D2H_PT_ITG_RESP, new parserDelegate(PT_ITG_RESP_Parse) },
             };
 
             #endregion
@@ -489,25 +559,25 @@ namespace uWAVELib
 
         #region Private
 
-        private uLBLPingerDataIDs PingerDataDecode(int data, out double value)
+        private DataID PingerDataDecode(int data, out double value)
         {
-            uLBLPingerDataIDs result = uLBLPingerDataIDs.Invalid;
+            DataID result = DataID.Invalid;
             value = double.NaN;
 
             if (data < uWAVE.CR_TMP_OFFSET)
             {
                 value = (data - uWAVE.CR_DPT_OFFSET) * uWAVE.CR_DPT_SCALE + uWAVE.MIN_DEPTH_M;
-                result = uLBLPingerDataIDs.DPT;
+                result = DataID.DPT;
             }
             else if (data < uWAVE.CR_BAT_OFFSET)
             {
                 value = (data - uWAVE.CR_TMP_OFFSET) * uWAVE.CR_TMP_SCALE + uWAVE.MIN_TEMPERATURE_C;
-                result = uLBLPingerDataIDs.TMP;
+                result = DataID.TMP;
             }
             else if (data < uWAVE.CR_BAT_OFFSET + uWAVE.CR_BAT_CRANGE)
             {
                 value = (data - uWAVE.CR_BAT_OFFSET) * uWAVE.CR_BAT_SCALE + uWAVE.MIN_BAT_VOLTAGE;
-                result = uLBLPingerDataIDs.BAT;
+                result = DataID.BAT;
             }
 
             return result;
@@ -529,6 +599,9 @@ namespace uWAVELib
             Temperature_C = double.NaN;
             Depth_m = double.NaN;
             SupplyVoltage_V = double.NaN;
+
+            Pitch = double.NaN;
+            Roll = double.NaN;
 
             IsWaitingRemote = false;
             IsWaitingLocal = false;
@@ -717,6 +790,23 @@ namespace uWAVELib
             }            
         }
 
+        private void INC_DTA_Parse(object[] parameters)
+        {                        
+            try
+            {
+                // $PUWV9,[reserved empty field],pitch,roll
+                double pitch = (double)parameters[1];
+                double roll = (double)parameters[2];
+
+                PTCROLLDataReceived.Rise(this, new EventArgs());
+
+            }
+            catch (Exception ex)
+            {
+                OnInfoEvent(ex);
+            }
+        }
+
 
 
         private void PT_SETTINGS_Parse(object[] parameters)
@@ -747,7 +837,7 @@ namespace uWAVELib
                 byte triesTaken = Convert.ToByte(intNullChecker(parameters[1]));
                 byte[] dataPacket = (byte[])(parameters[2]);
 
-                PacketTransferFailed.Rise(this, new PacketEventArgs(target_ptAddress, triesTaken, dataPacket));
+                PacketTransferFailed.Rise(this, new PacketEventArgs(target_ptAddress, triesTaken, double.NaN, dataPacket));
             }
             catch (Exception ex)
             {
@@ -757,14 +847,15 @@ namespace uWAVELib
         
         private void PT_DLVRD_Parse(object[] parameters)
         {
-            // $PUWVI,tareget_ptAddress,triesTaken,dataPacket
+            // $PUWVI,tareget_ptAddress,triesTaken,azimuth,dataPacket
             try
             {
                 byte target_ptAddress = Convert.ToByte(intNullChecker(parameters[0]));
                 byte triesTaken = Convert.ToByte(intNullChecker(parameters[1]));
-                byte[] dataPacket = (byte[])parameters[2];
+                double azimuth = doubleNullChecker(parameters[2]);
+                byte[] dataPacket = (byte[])parameters[3];
 
-                PacketTransferred.Rise(this, new PacketEventArgs(target_ptAddress, triesTaken, dataPacket));
+                PacketTransferred.Rise(this, new PacketEventArgs(target_ptAddress, triesTaken, azimuth, dataPacket));
             }
             catch (Exception ex)
             {
@@ -774,13 +865,14 @@ namespace uWAVELib
 
         private void PT_RCVD_Parse(object[] parameters)
         {
-            // $PUWVJ,sender_ptAddress,dataPacket
+            // $PUWVJ,sender_ptAddress,azimuth,dataPacket
             try
             {
                 byte sender_ptAddress = Convert.ToByte(intNullChecker(parameters[0]));
-                byte[] dataPacket = (byte[])parameters[1];
+                double azimuth = doubleNullChecker(parameters[1]);
+                byte[] dataPacket = (byte[])parameters[2];
 
-                PacketReceived.Rise(this, new PacketReceivedEventArgs(sender_ptAddress, dataPacket));
+                PacketReceived.Rise(this, new PacketReceivedEventArgs(sender_ptAddress, azimuth, dataPacket));
             }
             catch (Exception ex)
             {
@@ -789,7 +881,42 @@ namespace uWAVELib
         }
 
 
-        
+        private void PT_ITG_TMO_Parse(object[] parameters)
+        {
+            try
+            {
+                byte target_ptAddress = Convert.ToByte(intNullChecker(parameters[0]));
+                DataID dataID = (DataID)intNullChecker(parameters[1]);
+
+                PacketRequestTimeout.Rise(this, new PacketRequestTimeoutEventArgs(target_ptAddress, dataID));
+            }
+            catch (Exception ex)
+            {
+                OnInfoEvent(ex);
+            }
+        }
+
+        private void PT_ITG_RESP_Parse(object[] parameters)
+        {
+            // $PUWVM,target_ptAddress,pt_itg_dataID,[dataValue],pTime,[azimuth]
+
+            try
+            {
+                byte target_ptAddress = Convert.ToByte(intNullChecker(parameters[0]));
+                DataID dataID = (DataID)intNullChecker(parameters[1]);
+                double dataValue = doubleNullChecker(parameters[2]);
+                double pTime = doubleNullChecker(parameters[3]);
+                double azimuth = doubleNullChecker(parameters[4]);
+
+                PacketResponse.Rise(this, new PacketResponseEventArgs(target_ptAddress, dataID, dataValue, pTime, azimuth));
+            }
+            catch (Exception ex)
+            {
+                OnInfoEvent(ex);
+            }
+        }
+
+        /*
         private void CM_HEARD(object[] parameters)
         {
             // $PUWVL,b_id,b_lat,b_lon,b_toa_s,data_ID,dataValue,msr_dB
@@ -833,6 +960,7 @@ namespace uWAVELib
                 OnInfoEvent(ex);
             }
         }
+        */
 
 
         #endregion
@@ -917,6 +1045,18 @@ namespace uWAVELib
         }
 
 
+        public bool PTCROLLConfigQuery(bool isSaveToFlash, int periodMs)
+        {
+            var msg = NMEAParser.BuildProprietarySentence(ManufacturerCodes.UWV, "8", new object[]
+            {
+                Convert.ToInt32(isSaveToFlash),
+                periodMs
+            });
+
+            return TrySend(msg, ICs.IC_H2D_INC_DTA_CFG);
+        }
+
+
         public bool PacketMode_SettingQuery()
         {
             var msg = NMEAParser.BuildProprietarySentence(ManufacturerCodes.UWV, "D", new object[] { 0 });
@@ -954,6 +1094,13 @@ namespace uWAVELib
                 return TrySend(msg, ICs.IC_H2D_PT_SEND);
             }
             return false;
+        }
+
+
+        public bool PacketMode_Request(byte target_ptAddress, DataID dataID)
+        {
+            var msg = NMEAParser.BuildProprietarySentence(ManufacturerCodes.UWV, "K", new object[] { (int)target_ptAddress, (int)dataID });
+            return TrySend(msg, ICs.IC_H2D_PT_ITG);
         }
 
          
@@ -1092,6 +1239,7 @@ namespace uWAVELib
 
         public EventHandler DeviceInfoReceived;        
         public EventHandler AMBDataReceived;
+        public EventHandler PTCROLLDataReceived;
 
         public EventHandler<RCResponseReceivedEventArgs> RCResponseReceived;
         public EventHandler<RCTimeoutReceivedEventArgs> RCTimeoutReceived;
@@ -1104,6 +1252,10 @@ namespace uWAVELib
         public EventHandler<PacketEventArgs> PacketTransferFailed;
         public EventHandler<PacketEventArgs> PacketTransferred;
         public EventHandler<PacketReceivedEventArgs> PacketReceived;
+
+        public EventHandler<PacketRequestTimeoutEventArgs> PacketRequestTimeout;
+        public EventHandler<PacketResponseEventArgs> PacketResponse;
+
 
         #endregion
         

@@ -23,6 +23,7 @@ namespace uWAVELib
         RC_USR_CMD_006 = 13,
         RC_USR_CMD_007 = 14,
         RC_USR_CMD_008 = 15,
+        RC_MSG_ASYNC_IN = 16,
         RC_INVALID
     }
     
@@ -60,7 +61,11 @@ namespace uWAVELib
         IC_D2H_RC_TIMEOUT,
         IC_D2H_RC_ASYNC_IN,
         IC_H2D_AMB_DTA_CFG,
-        IC_D2H_AMB_DTA,        
+        IC_D2H_AMB_DTA,
+
+        IC_H2D_INC_DTA_CFG,
+        IC_D2H_INC_DTA,
+
         IC_H2D_DINFO_GET,
         IC_D2H_DINFO,
 
@@ -72,8 +77,9 @@ namespace uWAVELib
         IC_D2H_PT_DLVRD,
         IC_D2H_PT_RCVD,
 
-        IC_D2H_PT_HEARD,
-        IC_D2H_CM_HEARD,
+        IC_H2D_PT_ITG,
+        IC_D2H_PT_ITG_TMO,
+        IC_D2H_PT_ITG_RESP,
 
         IC_D2H_ANY,
         IC_INVALID
@@ -88,7 +94,7 @@ namespace uWAVELib
         Invalid
     }
 
-    public enum uLBLPingerDataIDs
+    public enum DataID
     {
         DPT,
         TMP,
@@ -133,7 +139,11 @@ namespace uWAVELib
             { "4", ICs.IC_D2H_RC_TIMEOUT },
             { "5", ICs.IC_D2H_RC_ASYNC_IN },
             { "6", ICs.IC_H2D_AMB_DTA_CFG },
-            { "7", ICs.IC_D2H_AMB_DTA },               
+            { "7", ICs.IC_D2H_AMB_DTA },
+            
+            { "8", ICs.IC_H2D_INC_DTA_CFG },
+            { "9", ICs.IC_D2H_INC_DTA },
+
             { "?", ICs.IC_H2D_DINFO_GET },
             { "!", ICs.IC_D2H_DINFO },
 
@@ -145,8 +155,9 @@ namespace uWAVELib
             { "I", ICs.IC_D2H_PT_DLVRD },
             { "J", ICs.IC_D2H_PT_RCVD },
 
-            {"K", ICs.IC_D2H_PT_HEARD },
-            {"L", ICs.IC_D2H_CM_HEARD },
+            {"K", ICs.IC_H2D_PT_ITG },
+            {"L", ICs.IC_D2H_PT_ITG_TMO },
+            {"M", ICs.IC_D2H_PT_ITG_RESP },
 
             { "-", ICs.IC_D2H_ANY }
         };
